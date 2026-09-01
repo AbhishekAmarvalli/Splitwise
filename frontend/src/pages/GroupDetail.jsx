@@ -14,6 +14,7 @@ export default function GroupDetail() {
   const [settlements, setSettlements] = useState([]);
   const [activeTab, setActiveTab] = useState('expenses');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
 
@@ -23,6 +24,7 @@ export default function GroupDetail() {
       setGroup(data);
     } catch (err) {
       toast.error('Failed to load group');
+      setError('Failed to load group. You may not have access or it may have been deleted.');
     }
   }, [id]);
 
@@ -88,10 +90,21 @@ export default function GroupDetail() {
     'member-removed': () => loadGroup(),
   });
 
-  if (loading || !group) {
+  if (loading) {
     return (
       <div className="loading-screen">
         <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  if (error || !group) {
+    return (
+      <div className="loading-screen">
+        <div className="empty-state">
+          <p>{error || 'Group not found'}</p>
+          <Link to="/" className="btn btn-primary" style={{ marginTop: '1rem' }}>← Back to Dashboard</Link>
+        </div>
       </div>
     );
   }
@@ -321,9 +334,47 @@ function AddExpenseModal({ group, onClose, onCreated }) {
     splitType: 'equal',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
+
+  const validate = (field, value) => {
+    switch (field) {
+      case 'description': {
+        if (!value.trim()) return 'Description is required';
+        if (value.trim().length > 500) return 'Description must be at most 500 characters';
+        return '';
+      }
+      case 'amount': {
+        if (!value && value !== 0) return 'Amount is required';
+        const num = parseFloat(value);
+        if (isNaN(num) || num <= 0) return 'Amount must be greater than 0';
+        if (num > 9999999999.99) return 'Amount is too large';
+        return '';
+      }
+      default: return '';
+    }
+  };
+
+  const handleChange = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    if (touched[field]) {
+      setErrors((prev) => ({ ...prev, [field]: validate(field, value) }));
+    }
+  };
+
+  const handleBlur = (field) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    setErrors((prev) => ({ ...prev, [field]: validate(field, form[field]) }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const descErr = validate('description', form.description);
+    const amtErr = validate('amount', form.amount);
+    setErrors({ description: descErr, amount: amtErr });
+    setTouched({ description: true, amount: true });
+    if (descErr || amtErr) return;
+
     setSubmitting(true);
     try {
       const amount = parseFloat(form.amount);
@@ -334,7 +385,7 @@ function AddExpenseModal({ group, onClose, onCreated }) {
 
       await api.createExpense({
         groupId: parseInt(group.id),
-        description: form.description,
+        description: form.description.trim(),
         amount,
         paidBy: parseInt(form.paidBy),
         splitType: form.splitType,
@@ -354,16 +405,25 @@ function AddExpenseModal({ group, onClose, onCreated }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Add Expense</h2>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <div className="form-group">
             <label>Description</label>
             <input
               type="text"
               value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              onChange={(e) => handleChange('description', e.target.value)}
+              onBlur={() => handleBlur('description')}
               placeholder="e.g., Dinner, Groceries, Uber"
+              maxLength={500}
               required
+              className={touched.description && errors.description ? 'field-error' : ''}
             />
+            {touched.description && errors.description && (
+              <span className="field-error-msg">{errors.description}</span>
+            )}
+            <span className={`char-count ${form.description.length > 450 ? (form.description.length >= 500 ? 'at-limit' : 'near-limit') : ''}`}>
+              {form.description.length}/500
+            </span>
           </div>
           <div className="form-group">
             <label>Amount ($)</label>
@@ -371,11 +431,17 @@ function AddExpenseModal({ group, onClose, onCreated }) {
               type="number"
               step="0.01"
               min="0.01"
+              max="9999999999.99"
               value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              onChange={(e) => handleChange('amount', e.target.value)}
+              onBlur={() => handleBlur('amount')}
               placeholder="0.00"
               required
+              className={touched.amount && errors.amount ? 'field-error' : ''}
             />
+            {touched.amount && errors.amount && (
+              <span className="field-error-msg">{errors.amount}</span>
+            )}
           </div>
           <div className="form-group">
             <label>Paid by</label>
@@ -398,7 +464,7 @@ function AddExpenseModal({ group, onClose, onCreated }) {
             </select>
           </div>
           <p className="split-preview">
-            Split equally: ${form.amount ? (parseFloat(form.amount) / group.members.length).toFixed(2) : '0.00'} per person
+            Split equally: ${form.amount && !isNaN(parseFloat(form.amount)) ? (parseFloat(form.amount) / group.members.length).toFixed(2) : '0.00'} per person
           </p>
           <div className="modal-actions">
             <button type="button" onClick={onClose} className="btn btn-ghost">Cancel</button>
@@ -416,9 +482,15 @@ function AddMemberModal({ groupId, onClose, onAdded }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [queryError, setQueryError] = useState('');
 
   const handleSearch = async (q) => {
     setQuery(q);
+    if (q.length > 255) {
+      setQueryError('Search query must be at most 255 characters');
+      return;
+    }
+    setQueryError('');
     if (q.length < 2) {
       setResults([]);
       return;
@@ -454,9 +526,17 @@ function AddMemberModal({ groupId, onClose, onAdded }) {
             type="text"
             value={query}
             onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Search users..."
+            placeholder="Type at least 2 characters..."
+            maxLength={255}
             autoFocus
+            className={queryError ? 'field-error' : ''}
           />
+          {queryError && (
+            <span className="field-error-msg">{queryError}</span>
+          )}
+          {query.length > 0 && query.length < 2 && (
+            <span className="field-error-msg">Type at least 2 characters to search</span>
+          )}
         </div>
         {searching && <p className="searching">Searching...</p>}
         <div className="search-results">

@@ -4,6 +4,17 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import toast from 'react-hot-toast';
 
+function validateGroupName(name) {
+  if (!name.trim()) return 'Group name is required';
+  if (name.trim().length > 255) return 'Group name must be at most 255 characters';
+  return '';
+}
+
+function validateGroupDescription(desc) {
+  if (desc.length > 1000) return 'Description must be at most 1000 characters';
+  return '';
+}
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -11,6 +22,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newGroup, setNewGroup] = useState({ name: '', description: '' });
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
 
   useEffect(() => {
     loadGroups();
@@ -27,13 +40,43 @@ export default function Dashboard() {
     }
   };
 
+  const handleGroupChange = (field, value) => {
+    setNewGroup((prev) => ({ ...prev, [field]: value }));
+    if (touched[field]) {
+      setErrors((prev) => ({
+        ...prev,
+        [field]: field === 'name' ? validateGroupName(value) : validateGroupDescription(value),
+      }));
+    }
+  };
+
+  const handleGroupBlur = (field) => {
+    const value = newGroup[field];
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    setErrors((prev) => ({
+      ...prev,
+      [field]: field === 'name' ? validateGroupName(value) : validateGroupDescription(value),
+    }));
+  };
+
   const handleCreateGroup = async (e) => {
     e.preventDefault();
+    const nameErr = validateGroupName(newGroup.name);
+    const descErr = validateGroupDescription(newGroup.description);
+    setErrors({ name: nameErr, description: descErr });
+    setTouched({ name: true, description: true });
+    if (nameErr || descErr) return;
+
     try {
-      const group = await api.createGroup(newGroup);
+      const group = await api.createGroup({
+        name: newGroup.name.trim(),
+        description: newGroup.description.trim() || undefined,
+      });
       setGroups([group, ...groups]);
       setShowCreateModal(false);
       setNewGroup({ name: '', description: '' });
+      setErrors({});
+      setTouched({});
       toast.success('Group created!');
       navigate(`/group/${group.id}`);
     } catch (err) {
@@ -92,31 +135,51 @@ export default function Dashboard() {
       </main>
 
       {showCreateModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+        <div className="modal-overlay" onClick={() => { setShowCreateModal(false); setErrors({}); setTouched({}); }}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>Create New Group</h2>
-            <form onSubmit={handleCreateGroup}>
+            <form onSubmit={handleCreateGroup} noValidate>
               <div className="form-group">
                 <label>Group Name</label>
                 <input
                   type="text"
                   value={newGroup.name}
-                  onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
+                  onChange={(e) => handleGroupChange('name', e.target.value)}
+                  onBlur={() => handleGroupBlur('name')}
                   placeholder="e.g., Roommates, Trip to Bali"
+                  maxLength={255}
                   required
+                  className={touched.name && errors.name ? 'field-error' : ''}
                 />
+                {touched.name && errors.name && (
+                  <span className="field-error-msg">{errors.name}</span>
+                )}
+                <span className={`char-count ${newGroup.name.length > 230 ? (newGroup.name.length >= 255 ? 'at-limit' : 'near-limit') : ''}`}>
+                  {newGroup.name.length}/255
+                </span>
               </div>
               <div className="form-group">
                 <label>Description (optional)</label>
                 <input
                   type="text"
                   value={newGroup.description}
-                  onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
+                  onChange={(e) => handleGroupChange('description', e.target.value)}
+                  onBlur={() => handleGroupBlur('description')}
                   placeholder="What's this group for?"
+                  maxLength={1000}
+                  className={touched.description && errors.description ? 'field-error' : ''}
                 />
+                {touched.description && errors.description && (
+                  <span className="field-error-msg">{errors.description}</span>
+                )}
+                {newGroup.description.length > 0 && (
+                  <span className={`char-count ${newGroup.description.length > 900 ? (newGroup.description.length >= 1000 ? 'at-limit' : 'near-limit') : ''}`}>
+                    {newGroup.description.length}/1000
+                  </span>
+                )}
               </div>
               <div className="modal-actions">
-                <button type="button" onClick={() => setShowCreateModal(false)} className="btn btn-ghost">
+                <button type="button" onClick={() => { setShowCreateModal(false); setErrors({}); setTouched({}); }} className="btn btn-ghost">
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary">Create</button>

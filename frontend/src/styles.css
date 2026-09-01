@@ -735,6 +735,38 @@ a:hover {
   padding: 1rem;
 }
 
+/* ===== Validation ===== */
+.field-error {
+  border-color: var(--danger) !important;
+}
+
+.field-error:focus {
+  box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.15) !important;
+}
+
+.field-error-msg {
+  font-size: 0.75rem;
+  color: var(--danger);
+  margin-top: 0.3rem;
+  display: block;
+}
+
+.char-count {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: 0.2rem;
+  display: block;
+}
+
+.char-count.near-limit {
+  color: var(--warning);
+}
+
+.char-count.at-limit {
+  color: var(--danger);
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 640px) {
   .dashboard-content,
