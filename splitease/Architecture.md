@@ -8,40 +8,45 @@ SplitEase is a cross-platform mobile expense-splitting app built with React Nati
 
 ## 2. High-Level Architecture
 
+```mermaid
+flowchart TB
+  subgraph Clients[Client Applications]
+    Web[Web client\nReact + Vite + React Router]
+    Mobile[Planned mobile client\nReact Native + Expo]
+  end
+
+  subgraph ClientLayers[Shared client responsibilities]
+    UI[Presentation\nScreens, forms, navigation]
+    State[Client state\nAuth, groups, expenses, balances]
+    Services[Integration services\nHTTP, Socket.IO, cache, deep links]
+  end
+
+  subgraph Backend[Backend services]
+    API[Node.js + Express API]
+    Auth[JWT authentication\nbcrypt password hashing]
+    Realtime[Socket.IO events]
+    Domain[Groups, expenses, balances, settlements]
+  end
+
+  DB[(PostgreSQL)]
+  Notifications[Push notifications\nFCM / APNs]
+  External[External payment apps\nUPI deep links]
+
+  Web --> UI
+  Mobile --> UI
+  UI --> State
+  State --> Services
+  Services -->|HTTPS / JSON| API
+  Services <-->|WebSocket events| Realtime
+  Services -->|Open payment link| External
+  API --> Auth
+  API --> Domain
+  Domain --> DB
+  Realtime --> Domain
+  Domain --> Notifications
 ```
-┌─────────────────────────────────────────────────┐
-│                   SplitEase App                  │
-│  ┌───────────┐ ┌──────────┐ ┌────────────────┐  │
-│  │  Screens   │ │  Store   │ │  Services      │  │
-│  │  (React    │ │ (Zustand)│ │  (API, Socket, │  │
-│  │  Native)   │ │          │ │   Push, Cache) │  │
-│  └─────┬─────┘ └────┬─────┘ └───────┬────────┘  │
-│        │             │               │            │
-│  ┌─────┴─────────────┴───────────────┴────────┐  │
-│  │              Core Layer                     │  │
-│  │  Navigation │ Hooks │ Utils │ Design Tokens │  │
-│  └─────────────────────┬───────────────────────┘  │
-└────────────────────────┼─────────────────────────┘
-                         │
-                    ┌────▼────┐
-                    │ Network │
-                    │  Layer  │
-                    └────┬────┘
-                         │
-            ┌────────────▼────────────────┐
-            │     Existing Backend         │
-            │  Node.js + Express + PG      │
-            │  Socket.IO + JWT Auth        │
-            │  Render Deployment           │
-            └─────────────┬───────────────┘
-                          │
-              ┌───────────▼───────────┐
-              │   Mobile Extensions    │
-              │  POST /api/devices     │
-              │  Push Notification Svc │
-              │  FCM + APNs            │
-              └────────────────────────┘
-```
+
+The web client is the current implementation in this repository. The Expo mobile client is the planned client described by the mobile architecture below; both use the same backend domain and persistence model.
 
 ---
 
