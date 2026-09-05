@@ -169,6 +169,16 @@ router.put('/:id', [
       return res.status(403).json({ error: 'You are not a member of this group' });
     }
 
+    // Only payer or group creator can update
+    const isPayer = expenseRows[0].paid_by === req.user.id;
+    const [isCreator] = await db.query(
+      'SELECT id FROM `groups` WHERE id = ? AND created_by = ?',
+      [expenseRows[0].group_id, req.user.id]
+    );
+    if (!isPayer && isCreator.length === 0) {
+      return res.status(403).json({ error: 'Only the payer or group creator can update expenses' });
+    }
+
     const updates = [];
     const values = [];
 

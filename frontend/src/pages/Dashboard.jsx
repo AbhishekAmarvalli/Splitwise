@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import FriendshipCharacters from '../components/FriendshipCharacters';
 import { api } from '../utils/api';
 import toast from 'react-hot-toast';
 
@@ -18,6 +20,7 @@ function validateGroupDescription(desc) {
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -92,6 +95,9 @@ export default function Dashboard() {
         </div>
         <div className="navbar-user">
           <span>{user?.name}</span>
+          <button onClick={toggleTheme} className="theme-toggle" title="Toggle theme">
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
           <button onClick={logout} className="btn btn-ghost btn-sm">Logout</button>
         </div>
       </header>
@@ -110,7 +116,8 @@ export default function Dashboard() {
           </div>
         ) : groups.length === 0 ? (
           <div className="empty-state">
-            <p>No groups yet!</p>
+            <FriendshipCharacters variant="default" size={180} />
+            <p style={{ marginTop: 'var(--space-4)', fontWeight: 800, fontSize: 'var(--text-h4)' }}>No groups yet!</p>
             <p>Create a group to start splitting expenses with friends.</p>
           </div>
         ) : (
@@ -126,7 +133,7 @@ export default function Dashboard() {
                 </div>
                 <div className="group-card-footer">
                   <span>👥 {group.member_count} members</span>
-                  <span>💰 ${parseFloat(group.total_expenses).toFixed(2)}</span>
+                  <span>💰 ₹{parseFloat(group.total_expenses).toFixed(2)}</span>
                 </div>
               </Link>
             ))}
@@ -137,7 +144,7 @@ export default function Dashboard() {
       {showCreateModal && (
         <div className="modal-overlay" onClick={() => { setShowCreateModal(false); setErrors({}); setTouched({}); }}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Create New Group</h2>
+            <h2>Create Group</h2>
             <form onSubmit={handleCreateGroup} noValidate>
               <div className="form-group">
                 <label>Group Name</label>
@@ -146,17 +153,15 @@ export default function Dashboard() {
                   value={newGroup.name}
                   onChange={(e) => handleGroupChange('name', e.target.value)}
                   onBlur={() => handleGroupBlur('name')}
-                  placeholder="e.g., Roommates, Trip to Bali"
+                  placeholder="Roommates, Trip to Bali..."
                   maxLength={255}
+                  autoFocus
                   required
                   className={touched.name && errors.name ? 'field-error' : ''}
                 />
                 {touched.name && errors.name && (
                   <span className="field-error-msg">{errors.name}</span>
                 )}
-                <span className={`char-count ${newGroup.name.length > 230 ? (newGroup.name.length >= 255 ? 'at-limit' : 'near-limit') : ''}`}>
-                  {newGroup.name.length}/255
-                </span>
               </div>
               <div className="form-group">
                 <label>Description (optional)</label>
@@ -171,11 +176,6 @@ export default function Dashboard() {
                 />
                 {touched.description && errors.description && (
                   <span className="field-error-msg">{errors.description}</span>
-                )}
-                {newGroup.description.length > 0 && (
-                  <span className={`char-count ${newGroup.description.length > 900 ? (newGroup.description.length >= 1000 ? 'at-limit' : 'near-limit') : ''}`}>
-                    {newGroup.description.length}/1000
-                  </span>
                 )}
               </div>
               <div className="modal-actions">

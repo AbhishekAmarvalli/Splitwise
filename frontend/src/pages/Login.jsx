@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import FriendshipCharacters from '../components/FriendshipCharacters';
 import toast from 'react-hot-toast';
 
 function validateEmail(email) {
@@ -72,6 +73,7 @@ export default function Login() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-header">
+          <FriendshipCharacters variant="wave" size={160} />
           <h1>💸 SplitWise Clone</h1>
           <p>Sign in to manage your shared expenses</p>
         </div>

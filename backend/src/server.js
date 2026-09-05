@@ -7,8 +7,11 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    origin: process.env.NODE_ENV === 'production'
+      ? process.env.FRONTEND_URL
+      : ['http://localhost:5173', 'http://localhost:5000'],
+    methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
@@ -30,13 +33,44 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// Socket.IO connections
+// Socket.IO connections with authentication
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+  const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+  let user = null;
 
-  socket.on('join-group', (groupId) => {
-    socket.join(`group-${groupId}`);
-    console.log(`Socket ${socket.id} joined group-${groupId}`);
+  if (token) {
+    try {
+      const jwt = require('jsonwebtoken');
+      user = jwt.verify(token, process.env.JWT_SECRET);
+      console.log('Authenticated socket:', socket.id, 'user:', user.id);
+    } catch (err) {
+      console.log('Invalid socket token:', socket.id);
+      socket.disconnect();
+      return;
+    }
+  } else {
+    console.log('No token provided, disconnecting:', socket.id);
+    socket.disconnect();
+    return;
+  }
+
+  socket.on('join-group', async (groupId) => {
+    // Verify user is a member of this group
+    const db = require('./db');
+    try {
+      const [membership] = await db.query(
+        'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?',
+        [groupId, user.id]
+      );
+      if (membership.length === 0) {
+        socket.emit('error', { message: 'Not a member of this group' });
+        return;
+      }
+      socket.join(`group-${groupId}`);
+      console.log(`Socket ${socket.id} (user ${user.id}) joined group-${groupId}`);
+    } catch (err) {
+      console.error('Socket join-group error:', err);
+    }
   });
 
   socket.on('leave-group', (groupId) => {

@@ -62,6 +62,17 @@ router.post('/', [
       return res.status(400).json({ error: 'Cannot settle with yourself' });
     }
 
+    // Only the payer or group creator can record a settlement
+    const [group] = await db.query('SELECT created_by FROM `groups` WHERE id = ?', [groupId]);
+    if (group.length === 0) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+    const isPayer = fromUser === req.user.id;
+    const isCreator = group[0].created_by === req.user.id;
+    if (!isPayer && !isCreator) {
+      return res.status(403).json({ error: 'Only the payer or group creator can record settlements' });
+    }
+
     // Check membership for both users
     const [fromMembership] = await db.query(
       'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?',

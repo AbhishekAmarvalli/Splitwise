@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import FriendshipCharacters from '../components/FriendshipCharacters';
 import toast from 'react-hot-toast';
 
 function validateName(name) {
@@ -82,6 +83,7 @@ export default function Register() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-header">
+          <FriendshipCharacters variant="highfive" size={160} />
           <h1>💸 SplitWise Clone</h1>
           <p>Create an account to start splitting expenses</p>
         </div>

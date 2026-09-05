@@ -13,8 +13,10 @@ export function useSocket(groupId, eventHandlers = {}) {
   }, [eventHandlers]);
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
+      auth: { token },
     });
 
     socketRef.current = socket;
