@@ -1,4 +1,4 @@
-# 💸 SplitWise Clone
+# 💸 Splitwise
 
 A full-stack group expense tracker with real-time settlement, built with React, Node.js, and PostgreSQL.
 

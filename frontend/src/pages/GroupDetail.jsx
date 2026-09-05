@@ -173,29 +173,38 @@ export default function GroupDetail() {
               {balances.transactions?.length === 0 ? (
                 <p className="all-settled">✅ All settled up!</p>
               ) : (
-                balances.transactions?.map((tx, i) => (
-                  <div key={i} className="settlement-row">
-                    <div className="settlement-flow">
-                      <span className="settlement-user">{tx.from.name}</span>
-                      <span className="settlement-arrow">→</span>
-                      <span className="settlement-user">{tx.to.name}</span>
+                balances.transactions?.map((tx, i) => {
+                  const isMyDebt = user && tx.from.id === user.id;
+                  return (
+                    <div key={i} className="settlement-row">
+                      <div className="settlement-flow">
+                        <span className="settlement-user">{tx.from.name}</span>
+                        <span className="settlement-arrow">→</span>
+                        <span className="settlement-user">{tx.to.name}</span>
+                      </div>
+                      <div className="settlement-amount-action">
+                        <span className="settlement-amount">₹{tx.amount.toFixed(2)}</span>
+                        {isMyDebt ? (
+                          <>
+                            <button onClick={() => setQrModal({ toUser: tx.to, amount: tx.amount, fromUser: tx.from })} className="btn btn-sm" title="Pay via UPI">📱 Pay</button>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await api.createSettlement({ groupId: parseInt(id), fromUser: tx.from.id, toUser: tx.to.id, amount: tx.amount, paymentMethod: 'cash' });
+                                  toast.success('Settlement recorded!');
+                                  loadBalances(); loadSettlements();
+                                } catch (err) { toast.error(err.message); }
+                              }}
+                              className="btn btn-cash btn-sm"
+                            >💵 Cash</button>
+                          </>
+                        ) : (
+                          <span className="settlement-status">owed to {tx.to.name}</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="settlement-amount-action">
-                      <span className="settlement-amount">₹{tx.amount.toFixed(2)}</span>
-                      <button onClick={() => setQrModal({ toUser: tx.to, amount: tx.amount, fromUser: tx.from })} className="btn btn-sm" title="Pay via UPI">📱 Pay</button>
-                      <button
-                        onClick={async () => {
-                          try {
-                            await api.createSettlement({ groupId: parseInt(id), fromUser: tx.from.id, toUser: tx.to.id, amount: tx.amount, paymentMethod: 'cash' });
-                            toast.success('Settlement recorded!');
-                            loadBalances(); loadSettlements();
-                          } catch (err) { toast.error(err.message); }
-                        }}
-                        className="btn btn-cash btn-sm"
-                      >💵 Cash</button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

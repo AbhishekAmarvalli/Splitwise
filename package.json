@@ -2,7 +2,7 @@
   "name": "splitwise-clone",
   "version": "1.0.0",
   "private": true,
-  "description": "SplitWise Clone - Group expense tracker with real-time settlement",
+  "description": "Splitwise - Group expense tracker with real-time settlement",
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && npm run dev",

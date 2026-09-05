@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import FriendshipCharacters from '../components/FriendshipCharacters';
 import toast from 'react-hot-toast';
 
 function validateName(name) {
@@ -83,8 +82,13 @@ export default function Register() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-header">
-          <FriendshipCharacters variant="highfive" size={160} />
-          <h1>💸 SplitWise Clone</h1>
+          <div className="auth-color-bar">
+            <span style={{ background: 'var(--red-500)' }}></span>
+            <span style={{ background: 'var(--yellow-400)' }}></span>
+            <span style={{ background: 'var(--green-500)' }}></span>
+            <span style={{ background: 'var(--blue-500)' }}></span>
+          </div>
+          <h1>💸 Splitwise</h1>
           <p>Create an account to start splitting expenses</p>
         </div>
         <form onSubmit={handleSubmit} noValidate>

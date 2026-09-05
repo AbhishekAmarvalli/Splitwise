@@ -91,7 +91,7 @@ export default function Dashboard() {
     <div className="dashboard">
       <header className="navbar">
         <div className="navbar-brand">
-          <h1>💸 SplitWise Clone</h1>
+          <h1>💸 Splitwise</h1>
         </div>
         <div className="navbar-user">
           <span>{user?.name}</span>

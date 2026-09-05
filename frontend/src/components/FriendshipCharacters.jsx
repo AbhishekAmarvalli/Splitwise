@@ -12,11 +12,11 @@ export default function FriendshipCharacters({ variant = 'default', size = 200 }
   const colors = {
     skin1: isDark ? '#fbbf24' : '#f59e0b',
     skin2: isDark ? '#fb923c' : '#ea580c',
-    shirt1: isDark ? '#a78bfa' : '#8b5cf6',
-    shirt2: isDark ? '#34d399' : '#10b981',
+    shirt1: isDark ? '#f87171' : '#dc2626',
+    shirt2: isDark ? '#facc15' : '#eab308',
     hair1: isDark ? '#fde68a' : '#92400e',
     hair2: isDark ? '#1c1917' : '#1c1917',
-    heart: isDark ? '#f87171' : '#ef4444',
+    heart: isDark ? '#4ade80' : '#22c55e',
     bg: 'transparent',
     outline: isDark ? '#fafafa' : '#1a1612',
   };

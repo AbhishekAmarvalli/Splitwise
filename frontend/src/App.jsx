@@ -42,9 +42,9 @@ export default function App() {
         toastOptions={{
           duration: 3000,
           style: {
-            background: '#1a1a2e',
+            background: '#1a1212',
             color: '#fff',
-            border: '1px solid #16213e',
+            border: '1px solid #402828',
           },
         }}
       />

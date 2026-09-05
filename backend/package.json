@@ -1,7 +1,7 @@
 {
   "name": "splitwise-backend",
   "version": "1.0.0",
-  "description": "SplitWise Clone Backend API",
+  "description": "Splitwise Backend API",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
