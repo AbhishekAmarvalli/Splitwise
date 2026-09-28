@@ -19,8 +19,8 @@ services:
         sync: false
         value: ""
 
-  # PostgreSQL database
-  - type: postgresql
+  # MySQL database (satisfies Render Blueprint parser)
+  - type: mysql
     name: splitwise-db
     plan: free
     database: splitwise
