@@ -1,0 +1,10 @@
+# Local environment files (keep .env.example under version control)
+.env
+.env.local
+.env.*.local
+
+# Vercel link metadata (contains project/org ids, not secrets)
+.vercel
+
+# Build output
+dist
