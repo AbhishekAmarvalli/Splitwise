@@ -31,7 +31,7 @@ async function seed() {
 
     // Reset auto-increment
     await client.query('ALTER SEQUENCE users_id_seq RESTART WITH 1');
-    await client.query('ALTER SEQUENCE "groups"_id_seq RESTART WITH 1');
+    await client.query('ALTER SEQUENCE groups_id_seq RESTART WITH 1');
     await client.query('ALTER SEQUENCE expenses_id_seq RESTART WITH 1');
     await client.query('ALTER SEQUENCE expense_splits_id_seq RESTART WITH 1');
     await client.query('ALTER SEQUENCE settlements_id_seq RESTART WITH 1');
