@@ -17,8 +17,8 @@ router.get('/:groupId', [
     const { groupId } = req.params;
 
     // Check membership
-    const [membership] = await db.query(
-      'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?',
+    const { rows: membership } = await db.query(
+      'SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2',
       [groupId, req.user.id]
     );
     if (membership.length === 0) {
@@ -26,11 +26,12 @@ router.get('/:groupId', [
     }
 
     // Get all members
-    const [members] = await db.query(`
+    const { rows: members } = await db.query(`
       SELECT u.id, u.name, u.email, u.avatar_url
       FROM users u
       JOIN group_members gm ON u.id = gm.user_id
-      WHERE gm.group_id = ?
+      WHERE gm.group_id = $1
+      ORDER BY gm.joined_at
     `, [groupId]);
 
     // Calculate net balance for each member
@@ -41,10 +42,10 @@ router.get('/:groupId', [
     }
 
     // Amounts paid by each person
-    const [paidAmounts] = await db.query(`
+    const { rows: paidAmounts } = await db.query(`
       SELECT paid_by, SUM(amount) as total_paid
       FROM expenses
-      WHERE group_id = ?
+      WHERE group_id = $1
       GROUP BY paid_by
     `, [groupId]);
 
@@ -55,11 +56,11 @@ router.get('/:groupId', [
     }
 
     // Amounts each person owes
-    const [owedAmounts] = await db.query(`
+    const { rows: owedAmounts } = await db.query(`
       SELECT es.user_id, SUM(es.amount) as total_owed
       FROM expense_splits es
       JOIN expenses e ON es.expense_id = e.id
-      WHERE e.group_id = ?
+      WHERE e.group_id = $1
       GROUP BY es.user_id
     `, [groupId]);
 
@@ -70,10 +71,10 @@ router.get('/:groupId', [
     }
 
     // Deduct settlements already made
-    const [settlements] = await db.query(`
+    const { rows: settlements } = await db.query(`
       SELECT from_user, to_user, SUM(amount) as total_settled
       FROM settlements
-      WHERE group_id = ?
+      WHERE group_id = $1
       GROUP BY from_user, to_user
     `, [groupId]);
 

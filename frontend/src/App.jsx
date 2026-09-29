@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuth } from './context/AuthContext';
+import { useTheme } from './context/ThemeContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -35,18 +36,25 @@ function PublicRoute({ children }) {
 }
 
 export default function App() {
+  const { theme } = useTheme();
+
   return (
     <>
       <Toaster
-        position="top-right"
+        position="top-center"
         toastOptions={{
           duration: 3000,
           style: {
-            background: '#1a1212',
-            color: '#fff',
-            border: '1px solid #402828',
+            background: 'var(--bg-card)',
+            color: 'var(--text)',
+            border: '2px solid var(--border-strong)',
+            borderRadius: 'var(--radius-sm)',
+            boxShadow: 'var(--shadow)',
+            fontWeight: 700,
           },
         }}
+        // Remount on theme change so open toasts repaint with the new palette.
+        key={theme}
       />
       <Routes>
         <Route

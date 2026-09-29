@@ -1,7 +1,8 @@
 {
-  "name": "splitwise-backend",
+  "name": "splitease-backend",
   "version": "1.0.0",
-  "description": "Splitwise Backend API",
+  "private": true,
+  "description": "SplitEase Backend API",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

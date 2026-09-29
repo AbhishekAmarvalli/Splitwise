@@ -17,14 +17,19 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Rate limit registration: 5 per hour per IP
+// Rate limit registration: 20 per hour per IP
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 5,
+  max: 20,
   message: { error: 'Too many registration attempts. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// Escape LIKE/ILIKE wildcards so a search for "50%" does not match everything
+function escapeLike(value) {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
 
 // Register
 router.post('/register', registerLimiter, [
@@ -41,7 +46,7 @@ router.post('/register', registerLimiter, [
     const { name, email, password } = req.body;
 
     // Check if user exists
-    const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+    const { rows: existing } = await db.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existing.length > 0) {
       return res.status(409).json({ error: 'Email already registered' });
     }
@@ -49,16 +54,11 @@ router.post('/register', registerLimiter, [
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create user
-    const [result] = await db.query(
-      'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)',
+    // Create user and fetch it back in one round trip
+    const { rows } = await db.query(
+      'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) ' +
+        'RETURNING id, name, email, avatar_url, created_at',
       [name, email, passwordHash]
-    );
-
-    // Fetch the created user
-    const [rows] = await db.query(
-      'SELECT id, name, email, avatar_url, created_at FROM users WHERE id = ?',
-      [result.insertId]
     );
     const user = rows[0];
 
@@ -89,8 +89,8 @@ router.post('/login', loginLimiter, [
   try {
     const { email, password } = req.body;
 
-    const [rows] = await db.query(
-      'SELECT id, name, email, password_hash, avatar_url, created_at FROM users WHERE email = ?',
+    const { rows } = await db.query(
+      'SELECT id, name, email, password_hash, avatar_url, created_at FROM users WHERE email = $1',
       [email]
     );
 
@@ -123,8 +123,8 @@ router.post('/login', loginLimiter, [
 // Get current user profile
 router.get('/me', authenticate, async (req, res) => {
   try {
-    const [rows] = await db.query(
-      'SELECT id, name, email, avatar_url, created_at FROM users WHERE id = ?',
+    const { rows } = await db.query(
+      'SELECT id, name, email, avatar_url, created_at FROM users WHERE id = $1',
       [req.user.id]
     );
 
@@ -147,9 +147,11 @@ router.get('/search', authenticate, async (req, res) => {
       return res.json([]);
     }
 
-    const [rows] = await db.query(
-      'SELECT id, name, email, avatar_url FROM users WHERE email LIKE ? OR name LIKE ? LIMIT 10',
-      [`%${q}%`, `%${q}%`]
+    const term = `%${escapeLike(q)}%`;
+    const { rows } = await db.query(
+      'SELECT id, name, email, avatar_url FROM users ' +
+        'WHERE email ILIKE $1 OR name ILIKE $1 ORDER BY name LIMIT 10',
+      [term]
     );
 
     res.json(rows);

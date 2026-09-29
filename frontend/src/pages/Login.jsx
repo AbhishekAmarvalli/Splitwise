@@ -78,7 +78,7 @@ export default function Login() {
             <span style={{ background: 'var(--green-500)' }}></span>
             <span style={{ background: 'var(--blue-500)' }}></span>
           </div>
-          <h1>💸 Splitwise</h1>
+          <h1>💸 SplitEase</h1>
           <p>Sign in to manage your shared expenses</p>
         </div>
         <form onSubmit={handleSubmit} noValidate>

@@ -14,6 +14,18 @@ const PAYMENT_METHODS = [
   { id: 'bank', label: '🏦 Bank Transfer', icon: '🏦' },
 ];
 
+const PAYMENT_LABELS = { cash: 'Cash', upi: 'UPI', card: 'Card', bank: 'Bank transfer' };
+const PAYMENT_ICONS = { cash: '💵', upi: '📱', card: '💳', bank: '🏦' };
+
+function PaymentBadge({ method }) {
+  const key = PAYMENT_LABELS[method] ? method : 'cash';
+  return (
+    <span className="payment-badge">
+      {PAYMENT_ICONS[key]} {PAYMENT_LABELS[key]}
+    </span>
+  );
+}
+
 export default function GroupDetail() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -142,6 +154,7 @@ export default function GroupDetail() {
                         </span>
                       ))}
                     </div>
+                    <PaymentBadge method={expense.payment_method} />
                   </div>
                 ))}
               </div>
@@ -224,6 +237,7 @@ export default function GroupDetail() {
                       <span className="settlement-user">{s.to_user_name}</span>
                       <span className="settlement-amount">₹{parseFloat(s.amount).toFixed(2)}</span>
                     </div>
+                    <PaymentBadge method={s.payment_method} />
                     <p className="settlement-date">{new Date(s.settled_at).toLocaleString('en-IN')}</p>
                   </div>
                 ))}
@@ -234,7 +248,7 @@ export default function GroupDetail() {
       </main>
 
       {showAddExpense && <AddExpenseModal group={group} onClose={() => setShowAddExpense(false)} onCreated={() => { setShowAddExpense(false); loadExpenses(); loadBalances(); }} />}
-      {showAddMember && <AddMemberModal groupId={id} onClose={() => setShowAddMember(false)} onAdded={() => { setShowAddMember(false); loadGroup(); }} />}
+      {showAddMember && <AddMemberModal groupId={id} existingMemberIds={(group.members || []).map((m) => m.id)} onClose={() => setShowAddMember(false)} onAdded={() => { setShowAddMember(false); loadGroup(); }} />}
       {qrModal && <QRCodeModal toUser={qrModal.toUser} fromUser={qrModal.fromUser} amount={qrModal.amount} onClose={() => setQrModal(null)} onSettled={() => { setQrModal(null); loadBalances(); loadSettlements(); }} groupId={id} />}
     </div>
   );
@@ -463,10 +477,13 @@ function QRCodeModal({ toUser, fromUser, amount, onClose, onSettled, groupId }) 
 }
 
 /* ===== Add Member Modal ===== */
-function AddMemberModal({ groupId, onClose, onAdded }) {
+function AddMemberModal({ groupId, existingMemberIds = [], onClose, onAdded }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
+
+  // People already in the group have nothing to add, so don't offer them.
+  const candidates = results.filter((u) => !existingMemberIds.includes(u.id));
 
   const handleSearch = async (q) => {
     setQuery(q);
@@ -490,8 +507,11 @@ function AddMemberModal({ groupId, onClose, onAdded }) {
           <input type="text" value={query} onChange={(e) => handleSearch(e.target.value)} placeholder="Type at least 2 characters..." maxLength={255} autoFocus />
         </div>
         {searching && <p className="searching">Searching...</p>}
+        {!searching && query.length >= 2 && candidates.length === 0 && (
+          <p className="searching">No new people found.</p>
+        )}
         <div className="search-results">
-          {results.map((u) => (
+          {candidates.map((u) => (
             <div key={u.id} className="search-result-item">
               <div className="search-result-info">
                 <span className="member-avatar">{u.name[0].toUpperCase()}</span>

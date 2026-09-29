@@ -67,37 +67,40 @@ const migrations = [
     FOREIGN KEY (to_user) REFERENCES users(id) ON DELETE SET NULL
   )`,
 
-  `CREATE INDEX idx_group_members_group ON group_members(group_id)`,
-  `CREATE INDEX idx_group_members_user ON group_members(user_id)`,
-  `CREATE INDEX idx_expenses_group ON expenses(group_id)`,
-  `CREATE INDEX idx_expense_splits_expense ON expense_splits(expense_id)`,
-  `CREATE INDEX idx_settlements_group ON settlements(group_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_group_members_group ON group_members(group_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_expenses_group ON expenses(group_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_expense_splits_expense ON expense_splits(expense_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_settlements_group ON settlements(group_id)`,
+
+  // Additive changes for databases created before these columns existed.
+  `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method VARCHAR(20) DEFAULT 'cash'`,
+  `ALTER TABLE settlements ADD COLUMN IF NOT EXISTS payment_method VARCHAR(20) DEFAULT 'cash'`,
 ];
 
-async function migrate() {
+async function runMigrations() {
+  const client = await db.pool.connect();
   try {
-    console.log('Running database migrations...');
-    const client = await db.pool.connect();
-    try {
-      for (const statement of migrations) {
-        try {
-          await client.query(statement);
-        } catch (err) {
-          // Ignore duplicate column/index errors (code 42710 = duplicate object, 42P07 = duplicate table)
-          if (err.code !== '42710' && err.code !== '42P07') {
-            throw err;
-          }
-        }
-      }
-      console.log('Migrations completed successfully!');
-    } finally {
-      client.release();
+    for (const statement of migrations) {
+      await client.query(statement);
     }
-    process.exit(0);
-  } catch (err) {
-    console.error('Migration failed:', err);
-    process.exit(1);
+  } finally {
+    client.release();
   }
 }
 
-migrate();
+// Run directly (`npm run db:migrate`) — not when required by the server.
+if (require.main === module) {
+  console.log('Running database migrations...');
+  runMigrations()
+    .then(() => {
+      console.log('Migrations completed successfully!');
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error('Migration failed:', err);
+      process.exit(1);
+    });
+}
+
+module.exports = { runMigrations };

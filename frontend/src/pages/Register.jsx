@@ -88,7 +88,7 @@ export default function Register() {
             <span style={{ background: 'var(--green-500)' }}></span>
             <span style={{ background: 'var(--blue-500)' }}></span>
           </div>
-          <h1>💸 Splitwise</h1>
+          <h1>💸 SplitEase</h1>
           <p>Create an account to start splitting expenses</p>
         </div>
         <form onSubmit={handleSubmit} noValidate>

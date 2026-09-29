@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 
+const { getCorsOptions } = require('./utils/cors');
 const authRoutes = require('./routes/auth');
 const groupRoutes = require('./routes/groups');
 const expenseRoutes = require('./routes/expenses');
@@ -10,20 +11,17 @@ const balanceRoutes = require('./routes/balances');
 
 const app = express();
 
-// Make a mock io available for routes that need it
-const mockIo = {
+// Allows the test suite (supertest) to inspect the app without a live socket server.
+app.set('io', {
   to: () => ({ emit: () => {} }),
-};
-app.set('io', mockIo);
+});
 
-// Security headers
-app.use(helmet());
+// Security headers. contentSecurityPolicy is disabled so the single-origin
+// production build can load its Google Fonts stylesheet.
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 
 // Middleware
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true,
-}));
+app.use(cors(getCorsOptions()));
 app.use(express.json({ limit: '1mb' }));
 
 // Routes
@@ -33,9 +31,14 @@ app.use('/api/expenses', expenseRoutes);
 app.use('/api/settlements', settlementRoutes);
 app.use('/api/balances', balanceRoutes);
 
-// Health check
+// Health check — used by Render/Fly health probes and uptime pings.
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Unknown API route
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
 });
 
 // Global error handler

@@ -21,6 +21,14 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // api.js fires this when the server rejects a stored token (expired/revoked),
+  // so a stale session drops back to the login screen instead of failing forever.
+  useEffect(() => {
+    const handleUnauthorized = () => setUser(null);
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, []);
+
   const login = async (email, password) => {
     const data = await api.login(email, password);
     localStorage.setItem('token', data.token);

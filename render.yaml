@@ -1,26 +1,31 @@
+# Free deployment blueprint.
+#
+#   Web service : Render free tier (serves the API, the built React app, and Socket.IO)
+#   Database    : Neon free-tier PostgreSQL, supplied via DATABASE_URL
+#
+# Render's own free PostgreSQL expires after 30 days, so the database lives on
+# Neon instead. Create it first, then paste its connection string into the
+# DATABASE_URL env var when Render asks. See DEPLOY.md for the walkthrough.
 services:
-  # Backend API + Frontend (serves built frontend in production)
   - type: web
-    name: splitwise-backend
+    name: splitease
     runtime: node
     plan: free
-    buildCommand: cd frontend && npm install && npm run build && cd ../backend && npm install
+    # Pick the region closest to you AND to your Neon database region.
+    region: singapore
+    buildCommand: cd frontend && npm install --include=dev && npm run build && cd ../backend && npm install --omit=dev
+    # Migrations run automatically on boot (see backend/src/server.js).
     startCommand: cd backend && node src/server.js
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: splitwise-db
-          property: connectionString
       - key: JWT_SECRET
         generateValue: true
+      # Paste the Neon connection string here (includes ?sslmode=require).
+      - key: DATABASE_URL
+        sync: false
+      # Leave blank for a single-origin deploy; set to your Vercel URL if you
+      # host the frontend separately. Comma-separate multiple origins.
       - key: FRONTEND_URL
         sync: false
-        value: ""
-
-  # MySQL database (satisfies Render Blueprint parser)
-  - type: mysql
-    name: splitwise-db
-    plan: free
-    database: splitwise

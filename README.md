@@ -1,15 +1,24 @@
-# 💸 Splitwise
+# 💸 SplitEase
 
 A full-stack group expense tracker with real-time settlement, built with React, Node.js, and PostgreSQL.
+
+Split expenses with friends, track who owes what, and settle up in as few
+transfers as possible — all with live updates over WebSockets.
 
 ## Features
 
 - **Group Management** — Create groups, add/remove members
-- **Expense Tracking** — Add expenses with equal splits, see who paid what
-- **Debt Simplification** — Greedy algorithm minimizes the number of transactions needed to settle all debts
-- **Real-time Updates** — Socket.IO broadcasts expense and settlement changes to all group members
-- **Settlement Recording** — Mark debts as paid and track settlement history
-- **JWT Authentication** — Secure user registration and login
+- **Expense Tracking** — Equal, exact-amount, and percentage splits, plus a
+  cash/UPI/card/bank payment method stored on every expense and settlement
+- **Debt Simplification** — Greedy algorithm minimises the number of
+  transactions needed to settle all debts
+- **Real-time Updates** — Socket.IO broadcasts expense and settlement changes
+  to everyone in the group
+- **UPI payments** — Generate a UPI QR code and deep link to pay a balance
+- **Email + password auth** — Registration/login with bcrypt hashing, JWTs,
+  and rate-limited login attempts
+- **Soft, curvy UI** — Rounded corners, red/green/blue shade scales, full dark
+  mode, and a phone-first responsive layout with safe-area insets
 
 ## Tech Stack
 
@@ -17,42 +26,43 @@ A full-stack group expense tracker with real-time settlement, built with React, 
 |-----------|-------------------------------------|
 | Frontend  | React 18, React Router 6, Vite      |
 | Backend   | Node.js, Express, Socket.IO         |
-| Database  | PostgreSQL                          |
+| Database  | PostgreSQL (Neon free tier)         |
 | Auth      | bcryptjs + JWT                      |
-| Deploy    | Render (web services + managed DB)  |
+| Deploy    | Vercel (frontend), Render (API), Neon (DB) |
+
+All three are on free tiers — see [DEPLOY.md](./DEPLOY.md).
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+
-- PostgreSQL (local or a hosted instance)
+- A PostgreSQL database (e.g. a free [Neon](https://neon.com) project)
 
 ### Setup
 
 ```bash
-# Clone the repo
 git clone <repo-url>
-cd splitwise-clone
+cd splitease
 
 # Install all dependencies
-npm install
-cd backend && npm install
-cd ../frontend && npm install
-cd ..
+npm run install:all
 
-# Set up environment variables
+# Configure the database
 cp backend/.env.example backend/.env
-# Edit backend/.env with your DATABASE_URL
+#   DATABASE_URL=postgresql://<user>:<password>@<host>/<db>?sslmode=require
+#   JWT_SECRET=<any long random string>
 
-# Create database tables
-npm run db:migrate
-
-# Seed sample data (optional)
-npm run db:seed
-
-# Start development servers
+# Start development servers (API :5000, frontend :5173)
 npm run dev
+```
+
+Schema migrations and seed data run **automatically** the first time the API
+boots, so there is no manual schema step. To run them by hand:
+
+```bash
+npm run db:migrate
+npm run db:seed
 ```
 
 Frontend: http://localhost:5173  
@@ -85,31 +95,30 @@ Backend API: http://localhost:5000
 | GET    | /api/balances/:groupId          | Calculate balances         |
 | POST   | /api/settlements                | Record a settlement        |
 | GET    | /api/settlements/group/:gid     | List group settlements     |
+| GET    | /api/health                     | Health check               |
+
+## Tests
+
+```bash
+npm test --prefix backend -- --testPathIgnorePatterns api.test   # pure unit tests
+npm test --prefix backend                                        # needs DATABASE_URL
+```
 
 ## Debt Simplification Algorithm
 
-The core algorithm (`backend/src/utils/simplifyDebts.js`) uses a **greedy matching** approach:
+The core algorithm (`backend/src/utils/simplifyDebts.js`) uses a **greedy
+matching** approach:
 
 1. Calculate net balances: `balance = total_paid - total_owed`
 2. Separate into creditors (positive) and debtors (negative)
 3. Match the largest debtor with the largest creditor
-4. Transfer `min(|debtor|, creditor)` between them
+4. Transfer `min(|debtor|, creditor|)` between them
 5. Repeat until all balances are zero
 
-This minimizes the number of transactions from potentially O(n²) down to O(n).
+This reduces the number of transfers from potentially O(n²) down to O(n).
 
-## Deployment to Render
+## Deployment
 
-1. Push this repo to GitHub
-2. Go to [Render](https://render.com) → New → Blueprint
-3. Connect your GitHub repo
-4. Render will auto-detect `render.yaml` and provision:
-   - Backend web service
-   - Frontend static site
-   - PostgreSQL database
-5. Set the `FRONTEND_URL` env var on the backend service to your frontend URL
-6. Run database migration on the backend:
-   ```bash
-   # SSH into the backend service or run via Render Shell
-   node src/migrate.js
-   ```
+Follow **[DEPLOY.md](./DEPLOY.md)** — it covers the free three-service setup
+(Vercel frontend + Render API + Neon PostgreSQL), plus a single-service
+fallback where Render serves everything from one URL.

@@ -16,34 +16,44 @@ router.get('/group/:groupId', [
     const { groupId } = req.params;
 
     // Check membership
-    const [membership] = await db.query(
-      'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?',
+    const { rows: membership } = await db.query(
+      'SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2',
       [groupId, req.user.id]
     );
     if (membership.length === 0) {
       return res.status(403).json({ error: 'You are not a member of this group' });
     }
 
-    const [expenses] = await db.query(`
+    const { rows: expenses } = await db.query(`
       SELECT e.*, u.name as paid_by_name, u.email as paid_by_email
       FROM expenses e
       LEFT JOIN users u ON e.paid_by = u.id
-      WHERE e.group_id = ?
-      ORDER BY e.created_at DESC
+      WHERE e.group_id = $1
+      ORDER BY e.created_at DESC, e.id DESC
     `, [groupId]);
 
-    // Fetch splits for each expense
-    const result = [];
-    for (const expense of expenses) {
-      const [splits] = await db.query(`
-        SELECT es.*, u.name as user_name, u.email as user_email
-        FROM expense_splits es
-        LEFT JOIN users u ON es.user_id = u.id
-        WHERE es.expense_id = ?
-      `, [expense.id]);
-
-      result.push({ ...expense, splits });
+    if (expenses.length === 0) {
+      return res.json([]);
     }
+
+    // Fetch every split in a single query instead of one query per expense
+    const { rows: allSplits } = await db.query(`
+      SELECT es.*, u.name as user_name, u.email as user_email
+      FROM expense_splits es
+      LEFT JOIN users u ON es.user_id = u.id
+      WHERE es.expense_id = ANY($1::int[])
+    `, [expenses.map((e) => e.id)]);
+
+    const splitsByExpense = new Map();
+    for (const split of allSplits) {
+      if (!splitsByExpense.has(split.expense_id)) splitsByExpense.set(split.expense_id, []);
+      splitsByExpense.get(split.expense_id).push(split);
+    }
+
+    const result = expenses.map((expense) => ({
+      ...expense,
+      splits: splitsByExpense.get(expense.id) || [],
+    }));
 
     res.json(result);
   } catch (err) {
@@ -60,6 +70,8 @@ router.post('/', [
   body('paidBy').isInt().withMessage('Payer is required'),
   body('splitType').isIn(['equal', 'exact', 'percentage']).withMessage('Invalid split type'),
   body('splits').isArray({ min: 1 }).withMessage('At least one split is required'),
+  body('splits.*.userId').isInt().withMessage('Each split needs a user'),
+  body('paymentMethod').optional().isIn(['cash', 'upi', 'card', 'bank']),
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -68,27 +80,46 @@ router.post('/', [
 
   let connection;
   try {
+    const { groupId, description, amount, paidBy, splitType, splits, paymentMethod } = req.body;
+
     connection = await db.getConnection();
-    await connection.beginTransaction();
+    await connection.query('BEGIN');
 
-    const { groupId, description, amount, paidBy, splitType, splits } = req.body;
-
-    // Check membership
-    const [membership] = await connection.query(
-      'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?',
-      [groupId, req.user.id]
+    // Everyone involved must belong to the group
+    const { rows: memberRows } = await connection.query(
+      'SELECT user_id FROM group_members WHERE group_id = $1',
+      [groupId]
     );
-    if (membership.length === 0) {
-      await connection.rollback();
+    const memberIds = new Set(memberRows.map((r) => r.user_id));
+
+    if (!memberIds.has(req.user.id)) {
+      await connection.query('ROLLBACK');
       return res.status(403).json({ error: 'You are not a member of this group' });
+    }
+    if (!memberIds.has(Number(paidBy))) {
+      await connection.query('ROLLBACK');
+      return res.status(400).json({ error: 'Payer must be a member of the group' });
+    }
+    const unknownSplitUser = splits.find((s) => !memberIds.has(Number(s.userId)));
+    if (unknownSplitUser) {
+      await connection.query('ROLLBACK');
+      return res.status(400).json({ error: 'Every split must belong to a group member' });
+    }
+
+    // Payer cannot be counted twice in the same expense
+    const uniqueSplitUsers = new Set(splits.map((s) => Number(s.userId)));
+    if (uniqueSplitUsers.size !== splits.length) {
+      await connection.query('ROLLBACK');
+      return res.status(400).json({ error: 'Each person can only appear once in a split' });
     }
 
     // Create expense
-    const [expenseResult] = await connection.query(
-      'INSERT INTO expenses (group_id, description, amount, paid_by, split_type) VALUES (?, ?, ?, ?, ?)',
-      [groupId, description, amount, paidBy, splitType]
+    const { rows: expenseRows } = await connection.query(
+      'INSERT INTO expenses (group_id, description, amount, paid_by, split_type, payment_method) ' +
+        'VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [groupId, description, amount, paidBy, splitType, paymentMethod || 'cash']
     );
-    const expenseId = expenseResult.insertId;
+    const expenseId = expenseRows[0].id;
 
     // Create splits
     let totalSplit = 0;
@@ -97,7 +128,7 @@ router.post('/', [
       const percentage = splitType === 'percentage' ? split.percentage : null;
 
       await connection.query(
-        'INSERT INTO expense_splits (expense_id, user_id, amount, percentage) VALUES (?, ?, ?, ?)',
+        'INSERT INTO expense_splits (expense_id, user_id, amount, percentage) VALUES ($1, $2, $3, $4)',
         [expenseId, split.userId, Math.round(splitAmount * 100) / 100, percentage]
       );
       totalSplit += splitAmount;
@@ -105,27 +136,27 @@ router.post('/', [
 
     // Validate total split equals expense amount
     if (Math.abs(totalSplit - amount) > 0.02 && splitType !== 'equal') {
-      await connection.rollback();
+      await connection.query('ROLLBACK');
       return res.status(400).json({ error: 'Total splits do not equal expense amount' });
     }
 
-    await connection.commit();
+    await connection.query('COMMIT');
     connection.release();
     connection = null;
 
     // Fetch full expense with splits
-    const [fullExpense] = await db.query(`
+    const { rows: fullExpense } = await db.query(`
       SELECT e.*, u.name as paid_by_name, u.email as paid_by_email
       FROM expenses e
       LEFT JOIN users u ON e.paid_by = u.id
-      WHERE e.id = ?
+      WHERE e.id = $1
     `, [expenseId]);
 
-    const [expenseSplits] = await db.query(`
+    const { rows: expenseSplits } = await db.query(`
       SELECT es.*, u.name as user_name, u.email as user_email
       FROM expense_splits es
       LEFT JOIN users u ON es.user_id = u.id
-      WHERE es.expense_id = ?
+      WHERE es.expense_id = $1
     `, [expenseId]);
 
     const result = { ...fullExpense[0], splits: expenseSplits };
@@ -137,7 +168,7 @@ router.post('/', [
     res.status(201).json(result);
   } catch (err) {
     if (connection) {
-      try { await connection.rollback(); } catch (e) {}
+      try { await connection.query('ROLLBACK'); } catch (e) { /* already rolled back */ }
       connection.release();
     }
     console.error('Create expense error:', err);
@@ -155,14 +186,14 @@ router.put('/:id', [
     const { id } = req.params;
     const { description, amount } = req.body;
 
-    const [expenseRows] = await db.query('SELECT * FROM expenses WHERE id = ?', [id]);
+    const { rows: expenseRows } = await db.query('SELECT * FROM expenses WHERE id = $1', [id]);
     if (expenseRows.length === 0) {
       return res.status(404).json({ error: 'Expense not found' });
     }
 
     // Check membership
-    const [membership] = await db.query(
-      'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?',
+    const { rows: membership } = await db.query(
+      'SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2',
       [expenseRows[0].group_id, req.user.id]
     );
     if (membership.length === 0) {
@@ -171,8 +202,8 @@ router.put('/:id', [
 
     // Only payer or group creator can update
     const isPayer = expenseRows[0].paid_by === req.user.id;
-    const [isCreator] = await db.query(
-      'SELECT id FROM `groups` WHERE id = ? AND created_by = ?',
+    const { rows: isCreator } = await db.query(
+      'SELECT id FROM "groups" WHERE id = $1 AND created_by = $2',
       [expenseRows[0].group_id, req.user.id]
     );
     if (!isPayer && isCreator.length === 0) {
@@ -183,12 +214,12 @@ router.put('/:id', [
     const values = [];
 
     if (description) {
-      updates.push('description = ?');
       values.push(description);
+      updates.push(`description = $${values.length}`);
     }
     if (amount) {
-      updates.push('amount = ?');
       values.push(amount);
+      updates.push(`amount = $${values.length}`);
     }
 
     if (updates.length === 0) {
@@ -198,13 +229,10 @@ router.put('/:id', [
     updates.push('updated_at = CURRENT_TIMESTAMP');
     values.push(id);
 
-    const [result] = await db.query(
-      `UPDATE expenses SET ${updates.join(', ')} WHERE id = ?`,
+    const { rows: updated } = await db.query(
+      `UPDATE expenses SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`,
       values
     );
-
-    // Fetch updated expense
-    const [updated] = await db.query('SELECT * FROM expenses WHERE id = ?', [id]);
 
     const io = req.app.get('io');
     io.to(`group-${expenseRows[0].group_id}`).emit('expense-updated', updated[0]);
@@ -223,15 +251,15 @@ router.delete('/:id', [
   try {
     const { id } = req.params;
 
-    const [expenseRows] = await db.query('SELECT * FROM expenses WHERE id = ?', [id]);
+    const { rows: expenseRows } = await db.query('SELECT * FROM expenses WHERE id = $1', [id]);
     if (expenseRows.length === 0) {
       return res.status(404).json({ error: 'Expense not found' });
     }
 
     // Only payer or group creator can delete
     const isPayer = expenseRows[0].paid_by === req.user.id;
-    const [isCreator] = await db.query(
-      'SELECT id FROM `groups` WHERE id = ? AND created_by = ?',
+    const { rows: isCreator } = await db.query(
+      'SELECT id FROM "groups" WHERE id = $1 AND created_by = $2',
       [expenseRows[0].group_id, req.user.id]
     );
 
@@ -239,7 +267,7 @@ router.delete('/:id', [
       return res.status(403).json({ error: 'Only the payer or group creator can delete expenses' });
     }
 
-    await db.query('DELETE FROM expenses WHERE id = ?', [id]);
+    await db.query('DELETE FROM expenses WHERE id = $1', [id]);
 
     const io = req.app.get('io');
     io.to(`group-${expenseRows[0].group_id}`).emit('expense-deleted', { expenseId: parseInt(id) });

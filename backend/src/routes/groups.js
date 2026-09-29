@@ -11,19 +11,19 @@ router.use(authenticate);
 // Get all groups for current user
 router.get('/', async (req, res) => {
   try {
-    const [rows] = await db.query(
-      'SELECT g.*, ' +
-      'u.name as creator_name, ' +
-      'COUNT(DISTINCT gm2.user_id) as member_count, ' +
-      'COALESCE(SUM(e.amount), 0) as total_expenses ' +
-      'FROM `groups` g ' +
-      'LEFT JOIN users u ON g.created_by = u.id ' +
-      'LEFT JOIN group_members gm ON g.id = gm.group_id ' +
-      'LEFT JOIN group_members gm2 ON g.id = gm2.group_id ' +
-      'LEFT JOIN expenses e ON g.id = e.group_id ' +
-      'WHERE gm.user_id = ? ' +
-      'GROUP BY g.id, u.name ' +
-      'ORDER BY g.created_at DESC',
+    // member_count / total_expenses are computed with correlated subqueries so a
+    // group with N members does not multiply the expense total by N (the previous
+    // multi-JOIN version inflated every total).
+    const { rows } = await db.query(
+      'SELECT g.*, u.name AS creator_name, ' +
+        '(SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS member_count, ' +
+        '(SELECT COALESCE(SUM(e.amount), 0) FROM expenses e WHERE e.group_id = g.id) AS total_expenses ' +
+        'FROM "groups" g ' +
+        'LEFT JOIN users u ON g.created_by = u.id ' +
+        'WHERE EXISTS (' +
+        '  SELECT 1 FROM group_members gm WHERE gm.group_id = g.id AND gm.user_id = $1' +
+        ') ' +
+        'ORDER BY g.created_at DESC',
       [req.user.id]
     );
 
@@ -37,8 +37,9 @@ router.get('/', async (req, res) => {
 // Create a new group
 router.post('/', [
   body('name').trim().notEmpty().withMessage('Group name is required'),
-  body('description').optional().trim(),
+  body('description').optional({ values: 'falsy' }).trim(),
   body('memberIds').optional().isArray(),
+  body('memberIds.*').optional().isInt().withMessage('Member ids must be integers'),
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -49,43 +50,36 @@ router.post('/', [
     const { name, description, memberIds = [] } = req.body;
 
     // Create group
-    const [result] = await db.query(
-      'INSERT INTO `groups` (name, description, created_by) VALUES (?, ?, ?)',
+    const { rows: created } = await db.query(
+      'INSERT INTO "groups" (name, description, created_by) VALUES ($1, $2, $3) RETURNING id',
       [name, description || null, req.user.id]
     );
 
-    const groupId = result.insertId;
+    const groupId = created[0].id;
 
-    // Add creator as member
-    await db.query(
-      'INSERT IGNORE INTO group_members (group_id, user_id) VALUES (?, ?)',
-      [groupId, req.user.id]
-    );
-
-    // Add other members
-    for (const memberId of memberIds) {
-      if (memberId !== req.user.id) {
-        await db.query(
-          'INSERT IGNORE INTO group_members (group_id, user_id) VALUES (?, ?)',
-          [groupId, memberId]
-        );
-      }
+    // Creator + invited members share one de-duplicated insert path.
+    const uniqueMemberIds = [...new Set([req.user.id, ...memberIds.map(Number)])];
+    for (const memberId of uniqueMemberIds) {
+      await db.query(
+        'INSERT INTO group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT (group_id, user_id) DO NOTHING',
+        [groupId, memberId]
+      );
     }
 
     // Fetch full group with members
-    const [fullGroup] = await db.query(
-      'SELECT g.*, u.name as creator_name ' +
-      'FROM `groups` g ' +
-      'LEFT JOIN users u ON g.created_by = u.id ' +
-      'WHERE g.id = ?',
+    const { rows: fullGroup } = await db.query(
+      'SELECT g.*, u.name AS creator_name ' +
+        'FROM "groups" g ' +
+        'LEFT JOIN users u ON g.created_by = u.id ' +
+        'WHERE g.id = $1',
       [groupId]
     );
 
-    const [members] = await db.query(
+    const { rows: members } = await db.query(
       'SELECT u.id, u.name, u.email, u.avatar_url ' +
-      'FROM users u ' +
-      'JOIN group_members gm ON u.id = gm.user_id ' +
-      'WHERE gm.group_id = ?',
+        'FROM users u ' +
+        'JOIN group_members gm ON u.id = gm.user_id ' +
+        'WHERE gm.group_id = $1 ORDER BY gm.joined_at',
       [groupId]
     );
 
@@ -108,8 +102,8 @@ router.get('/:id', [
     const { id } = req.params;
 
     // Check membership
-    const [membership] = await db.query(
-      'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?',
+    const { rows: membership } = await db.query(
+      'SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2',
       [id, req.user.id]
     );
 
@@ -117,11 +111,11 @@ router.get('/:id', [
       return res.status(403).json({ error: 'You are not a member of this group' });
     }
 
-    const [group] = await db.query(
-      'SELECT g.*, u.name as creator_name ' +
-      'FROM `groups` g ' +
-      'LEFT JOIN users u ON g.created_by = u.id ' +
-      'WHERE g.id = ?',
+    const { rows: group } = await db.query(
+      'SELECT g.*, u.name AS creator_name ' +
+        'FROM "groups" g ' +
+        'LEFT JOIN users u ON g.created_by = u.id ' +
+        'WHERE g.id = $1',
       [id]
     );
 
@@ -129,11 +123,11 @@ router.get('/:id', [
       return res.status(404).json({ error: 'Group not found' });
     }
 
-    const [members] = await db.query(
+    const { rows: members } = await db.query(
       'SELECT u.id, u.name, u.email, u.avatar_url ' +
-      'FROM users u ' +
-      'JOIN group_members gm ON u.id = gm.user_id ' +
-      'WHERE gm.group_id = ?',
+        'FROM users u ' +
+        'JOIN group_members gm ON u.id = gm.user_id ' +
+        'WHERE gm.group_id = $1 ORDER BY gm.joined_at',
       [id]
     );
 
@@ -148,14 +142,14 @@ router.get('/:id', [
 router.put('/:id', [
   param('id').isInt(),
   body('name').optional().trim().notEmpty(),
-  body('description').optional().trim(),
+  body('description').optional({ values: 'falsy' }).trim(),
 ], async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description } = req.body;
 
     // Only creator can update
-    const [group] = await db.query('SELECT * FROM `groups` WHERE id = ? AND created_by = ?', [id, req.user.id]);
+    const { rows: group } = await db.query('SELECT * FROM "groups" WHERE id = $1 AND created_by = $2', [id, req.user.id]);
     if (group.length === 0) {
       return res.status(403).json({ error: 'Only the group creator can update the group' });
     }
@@ -164,12 +158,12 @@ router.put('/:id', [
     const values = [];
 
     if (name) {
-      updates.push('name = ?');
       values.push(name);
+      updates.push(`name = $${values.length}`);
     }
     if (description !== undefined) {
-      updates.push('description = ?');
       values.push(description || null);
+      updates.push(`description = $${values.length}`);
     }
 
     if (updates.length === 0) {
@@ -179,13 +173,10 @@ router.put('/:id', [
     updates.push('updated_at = CURRENT_TIMESTAMP');
     values.push(id);
 
-    await db.query(
-      'UPDATE `groups` SET ' + updates.join(', ') + ' WHERE id = ?',
+    const { rows: updated } = await db.query(
+      'UPDATE "groups" SET ' + updates.join(', ') + ` WHERE id = $${values.length} RETURNING *`,
       values
     );
-
-    // Fetch updated group
-    const [updated] = await db.query('SELECT * FROM `groups` WHERE id = ?', [id]);
 
     res.json(updated[0]);
   } catch (err) {
@@ -204,29 +195,32 @@ router.post('/:id/members', [
     const { userId } = req.body;
 
     // Check membership
-    const [membership] = await db.query(
-      'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?',
+    const { rows: membership } = await db.query(
+      'SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2',
       [id, req.user.id]
     );
     if (membership.length === 0) {
       return res.status(403).json({ error: 'You are not a member of this group' });
     }
 
-    // Add member
+    const { rows: invited } = await db.query(
+      'SELECT id, name, email, avatar_url FROM users WHERE id = $1',
+      [userId]
+    );
+    if (invited.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Add member (idempotent)
     await db.query(
-      'INSERT IGNORE INTO group_members (group_id, user_id) VALUES (?, ?)',
+      'INSERT INTO group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT (group_id, user_id) DO NOTHING',
       [id, userId]
     );
 
-    const [member] = await db.query(
-      'SELECT id, name, email, avatar_url FROM users WHERE id = ?',
-      [userId]
-    );
-
     const io = req.app.get('io');
-    io.to('group-' + id).emit('member-added', member[0]);
+    io.to('group-' + id).emit('member-added', invited[0]);
 
-    res.json(member[0]);
+    res.json(invited[0]);
   } catch (err) {
     console.error('Add member error:', err);
     res.status(500).json({ error: 'Failed to add member' });
@@ -243,14 +237,14 @@ router.delete('/:id/members/:userId', [
 
     // Only creator can remove members (or user removing themselves)
     if (parseInt(userId) !== req.user.id) {
-      const [group] = await db.query('SELECT * FROM `groups` WHERE id = ? AND created_by = ?', [id, req.user.id]);
+      const { rows: group } = await db.query('SELECT * FROM "groups" WHERE id = $1 AND created_by = $2', [id, req.user.id]);
       if (group.length === 0) {
         return res.status(403).json({ error: 'Only the group creator can remove members' });
       }
     }
 
     await db.query(
-      'DELETE FROM group_members WHERE group_id = ? AND user_id = ?',
+      'DELETE FROM group_members WHERE group_id = $1 AND user_id = $2',
       [id, userId]
     );
 
@@ -271,12 +265,12 @@ router.delete('/:id', [
   try {
     const { id } = req.params;
 
-    const [group] = await db.query('SELECT * FROM `groups` WHERE id = ? AND created_by = ?', [id, req.user.id]);
+    const { rows: group } = await db.query('SELECT * FROM "groups" WHERE id = $1 AND created_by = $2', [id, req.user.id]);
     if (group.length === 0) {
       return res.status(403).json({ error: 'Only the group creator can delete the group' });
     }
 
-    await db.query('DELETE FROM `groups` WHERE id = ?', [id]);
+    await db.query('DELETE FROM "groups" WHERE id = $1', [id]);
 
     const io = req.app.get('io');
     io.to('group-' + id).emit('group-deleted', { groupId: parseInt(id) });

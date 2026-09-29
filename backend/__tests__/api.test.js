@@ -11,7 +11,7 @@ const testPassword = 'testpass123';
 afterAll(async () => {
   // Delete test user (cascades to groups/expenses via FK)
   if (userId) {
-    await db.query('DELETE FROM users WHERE id = ?', [userId]);
+    await db.query('DELETE FROM users WHERE id = $1', [userId]);
   }
   const pool = db.pool;
   await pool.end();
@@ -291,7 +291,7 @@ describe('Balances API', () => {
     expect(res.status).toBe(403);
 
     // Cleanup
-    await db.query('DELETE FROM users WHERE id = ?', [regRes.body.user.id]);
+    await db.query('DELETE FROM users WHERE id = $1', [regRes.body.user.id]);
   });
 });
 
