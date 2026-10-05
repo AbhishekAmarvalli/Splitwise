@@ -1,5 +1,8 @@
 # 💸 SplitEase
 
+**🌐 Live app: <https://splitease-red.vercel.app>** — try it now, demo login
+`alice@example.com` / `password123` (or register a new account).
+
 A full-stack group expense tracker with real-time settlement, built with React, Node.js, and PostgreSQL.
 
 Split expenses with friends, track who owes what, and settle up in as few
@@ -34,8 +37,11 @@ transfers as possible — all with live updates over WebSockets.
 
 All services are on free tiers — see [DEPLOY.md](./DEPLOY.md).
 
-**Live:** frontend at <https://splitease-red.vercel.app>, API at
-<https://splitease-api-gamma.vercel.app>.
+| | URL |
+|---|---|
+| 🌐 Frontend | <https://splitease-red.vercel.app> |
+| ⚙️ API | <https://splitease-api-gamma.vercel.app> (health: `/api/health`) |
+| 🗄️ Database | Neon free-tier PostgreSQL (pooled, `?sslmode=require`) |
 
 ## Getting Started
 
