@@ -13,24 +13,29 @@ transfers as possible — all with live updates over WebSockets.
 - **Debt Simplification** — Greedy algorithm minimises the number of
   transactions needed to settle all debts
 - **Real-time Updates** — Socket.IO broadcasts expense and settlement changes
-  to everyone in the group
+  to everyone in the group; on serverless hosts the client transparently
+  falls back to polling so groups still feel live
 - **UPI payments** — Generate a UPI QR code and deep link to pay a balance
 - **Email + password auth** — Registration/login with bcrypt hashing, JWTs,
   and rate-limited login attempts
-- **Soft, curvy UI** — Rounded corners, red/green/blue shade scales, full dark
-  mode, and a phone-first responsive layout with safe-area insets
+- **Phone-friendly UI** — iOS Safari and Android Chrome get safe-area insets,
+  password-manager autofill, 16px form fields (no focus zoom), bottom-sheet
+  modals, and a phone-first responsive layout
 
 ## Tech Stack
 
 | Layer     | Technology                          |
 |-----------|-------------------------------------|
 | Frontend  | React 18, React Router 6, Vite      |
-| Backend   | Node.js, Express, Socket.IO         |
+| Backend   | Node.js, Express, Socket.IO (with automatic polling fallback) |
 | Database  | PostgreSQL (Neon free tier)         |
 | Auth      | bcryptjs + JWT                      |
-| Deploy    | Vercel (frontend), Render (API), Neon (DB) |
+| Deploy    | Vercel (frontend + API), Neon (DB)  |
 
-All three are on free tiers — see [DEPLOY.md](./DEPLOY.md).
+All services are on free tiers — see [DEPLOY.md](./DEPLOY.md).
+
+**Live:** frontend at <https://splitease-red.vercel.app>, API at
+<https://splitease-api-gamma.vercel.app>.
 
 ## Getting Started
 
@@ -119,6 +124,7 @@ This reduces the number of transfers from potentially O(n²) down to O(n).
 
 ## Deployment
 
-Follow **[DEPLOY.md](./DEPLOY.md)** — it covers the free three-service setup
-(Vercel frontend + Render API + Neon PostgreSQL), plus a single-service
-fallback where Render serves everything from one URL.
+Follow **[DEPLOY.md](./DEPLOY.md)** — the live setup is Vercel frontend +
+Vercel serverless API + Neon PostgreSQL, all on free tiers ($0/month).
+There is also a single-service Render fallback described at the end of that
+guide.

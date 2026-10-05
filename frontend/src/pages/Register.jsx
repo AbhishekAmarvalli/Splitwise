@@ -97,6 +97,9 @@ export default function Register() {
             <input
               id="name"
               type="text"
+              name="name"
+              autoComplete="name"
+              enterKeyHint="next"
               value={name}
               onChange={(e) => handleChange('name', e.target.value)}
               onBlur={() => handleBlur('name')}
@@ -114,6 +117,13 @@ export default function Register() {
             <input
               id="email"
               type="email"
+              name="email"
+              autoComplete="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="next"
+              inputMode="email"
               value={email}
               onChange={(e) => handleChange('email', e.target.value)}
               onBlur={() => handleBlur('email')}
@@ -131,6 +141,9 @@ export default function Register() {
             <input
               id="password"
               type="password"
+              name="password"
+              autoComplete="new-password"
+              enterKeyHint="go"
               value={password}
               onChange={(e) => handleChange('password', e.target.value)}
               onBlur={() => handleBlur('password')}

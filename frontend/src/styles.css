@@ -291,7 +291,22 @@ html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Stop Android/iOS from auto-inflating text in landscape and from
+     converting things like phone numbers into links. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   background: var(--bg);
+  /* Kill the 300ms tap delay and the grey flash on old Android WebViews. */
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+}
+
+/* Comfortable tap targets on phones (Apple HIG asks for 44px). */
+button,
+a,
+input,
+select,
+[role="button"] {
+  touch-action: manipulation;
 }
 
 body {

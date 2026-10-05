@@ -87,6 +87,13 @@ export default function Login() {
             <input
               id="email"
               type="email"
+              name="email"
+              autoComplete="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="next"
+              inputMode="email"
               value={email}
               onChange={(e) => handleChange('email', e.target.value)}
               onBlur={() => handleBlur('email')}
@@ -104,6 +111,9 @@ export default function Login() {
             <input
               id="password"
               type="password"
+              name="password"
+              autoComplete="current-password"
+              enterKeyHint="go"
               value={password}
               onChange={(e) => handleChange('password', e.target.value)}
               onBlur={() => handleBlur('password')}

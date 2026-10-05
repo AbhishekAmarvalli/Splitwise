@@ -1,102 +1,88 @@
 # Deploying SplitEase (100% free)
 
-SplitEase runs as three free services:
+SplitEase runs as three free services — no credit card required anywhere:
 
 | Piece | Service | Why |
 |-------|---------|-----|
-| Frontend (React) | **Vercel** — free tier | Static build, global CDN, SPA rewrites |
-| API + realtime (Express + Socket.IO) | **Render** — free web service | Needs a long-lived process, which serverless functions can't provide |
-| Database | **Neon** — free tier | Free forever. Render's own free Postgres expires after 30 days |
+| Frontend (React) | **Vercel** — `splitease` project | Static build, global CDN, SPA rewrites |
+| API (Express) | **Vercel** — `splitease-api` project | Serverless function, no cold-start bills, zero config |
+| Database | **Neon** — free tier | Free forever Postgres with pooling |
 
 ```
-Browser ──> Vercel (static React build)
+Browser ──> Vercel (frontend: splitease-red.vercel.app)
               │  VITE_API_URL
-              └──> Render (Express API + Socket.IO) ────> Neon (PostgreSQL)
+              └──> Vercel (API: splitease-api-gamma.vercel.app) ──> Neon (PostgreSQL)
 ```
 
-All three have a free tier and no credit card is required.
+> **Realtime note:** Socket.IO needs a long-lived process, which serverless
+> functions don't have. The frontend detects a failed socket connection and
+> automatically falls back to polling the API every 15 s while the tab is
+> visible (`frontend/src/hooks/useSocket.js`), so groups still update live.
+>
+> **Rate limiting** is per-function-instance on serverless, so limits are
+> approximate — fine for a demo, and `trust proxy = 1` keeps the IP keying
+> correct behind Vercel's edge.
 
----
+## 1. Database (Neon) — already provisioned
 
-## 1. Create the free PostgreSQL database (Neon)
+- Project: `rough-water-70006351` (`SplitEase`, region `aws-ap-southeast-1`)
+- Connection string is stored as the `DATABASE_URL` secret on the
+  `splitease-api` Vercel project.
+- Migrations run automatically on every cold start
+  (`backend/api/index.js` → `backend/src/migrate.js`), so there is no manual
+  schema step. Seed data (demo users) is loaded via `npm run db:seed`.
 
-1. Sign up at <https://neon.tech> and create a project (choose the region
-   closest to you — e.g. `ap-south-1` / Singapore for India).
-2. Copy the connection string from **Connection Details → Pooled**. It looks like:
-   ```
-   postgresql://user:password@ep-xxxxxx-xxxxxx.ap-south-1.aws.neon.tech/neondb?sslmode=require
-   ```
-3. Keep it — you'll paste it in step 2.
+## 2. API (Vercel project `splitease-api`)
 
-The migrations run automatically the first time the backend boots
-(`backend/src/migrate.js`), so there is no manual schema step.
+- Entry: `backend/api/index.js` (serverless handler that rewrites the path via
+  the `__orig` query parameter and exports the Express app).
+- Routing: `backend/vercel.json` rewrites `/api/*` into the function.
+- Env vars (Production): `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`
+  (comma-separated frontend origins for CORS).
+- Deploy:
 
----
+  ```bash
+  cd backend
+  npx vercel link --project splitease-api   # already linked
+  npx vercel deploy --prod
+  ```
 
-## 2. Deploy the API on Render
+- Live URL: <https://splitease-api-gamma.vercel.app> —
+  health check: `/api/health`
 
-1. Push this repository to GitHub first (Render reads `render.yaml` from it).
-2. Go to <https://render.com> → **New → Blueprint** → connect the repo.
-3. Render picks up `render.yaml` and creates the `splitease` web service.
-   When it asks for environment variables:
-   - `DATABASE_URL` — paste your Neon connection string
-   - `JWT_SECRET` — auto-generated, leave as is
-   - `FRONTEND_URL` — leave blank for now (set it in step 4)
-4. Deploy, then note the URL, e.g. `https://splitease-api.onrender.com`.
-   Health check: `https://splitease-api.onrender.com/api/health`
+## 3. Frontend (Vercel project `splitease`)
 
-> **Warm-up:** Render's free service spins down after ~15 minutes of inactivity,
-> so the first request takes ~50 seconds. Ping `/api/health` every 10 minutes
-> with a free cron job (e.g. <https://cron-job.org>) if you want it always warm.
+- Env var: `VITE_API_URL=https://splitease-api-gamma.vercel.app`
+  (baked in at build time — update it **before** building if the API URL ever
+  changes).
+- Deploy:
 
----
+  ```bash
+  cd frontend
+  npx vercel deploy --prod
+  ```
 
-## 3. Deploy the frontend on Vercel
-
-```bash
-cd frontend
-npx vercel login          # if you are not logged in yet
-npx vercel --prod
-```
-
-Or push to GitHub and import the repo in <https://vercel.com> with:
-
-| Setting | Value |
-|---------|-------|
-| Root directory | `frontend` |
-| Framework preset | Vite (auto-detected) |
-| Build command | `npm run build` |
-| Output directory | `dist` |
-| Environment variable | `VITE_API_URL=https://splitease-api.onrender.com` |
-
-`VITE_API_URL` is baked in at build time, so change it **before** building.
-
----
-
-## 4. Connect them
-
-1. On Render, set `FRONTEND_URL` to your Vercel URL
-   (`https://your-app.vercel.app`) and redeploy. This allows the frontend to
-   call the API cross-origin (comma-separate multiple origins if needed).
-2. Confirm:
-   - `https://splitease-api.onrender.com/api/health` → `{"status":"ok"}`
-   - Your Vercel URL loads and you can register / log in
-
----
+- Live URL: <https://splitease-red.vercel.app>
 
 ## Environment variables
 
 | Var | Set on | Needed for |
 |-----|--------|------------|
-| `DATABASE_URL` | Render | PostgreSQL connection (must include `?sslmode=require`) |
-| `JWT_SECRET` | Render | Signing auth tokens (auto-generated by Render) |
-| `JWT_EXPIRES_IN` | Render (optional) | Token lifetime, defaults to `7d` |
-| `FRONTEND_URL` | Render | CORS allow-list — your Vercel origin |
-| `NODE_ENV` | Render | Set to `production` by `render.yaml` |
-| `VITE_API_URL` | Vercel | Base URL of the Render API (baked in at build time) |
+| `DATABASE_URL` | splitease-api | Neon Postgres connection (must include `?sslmode=require`) |
+| `JWT_SECRET` | splitease-api | Signing auth tokens |
+| `JWT_EXPIRES_IN` | splitease-api (optional) | Token lifetime, defaults to `7d` |
+| `FRONTEND_URL` | splitease-api | CORS allow-list — frontend origin(s) |
+| `VITE_API_URL` | splitease | Base URL of the API (baked in at build time) |
+
+## Costs
+
+All three services are on free tiers with no credit card: Vercel Hobby
+(frontend + functions), Neon Free (0.5 GB Postgres). Expected monthly cost:
+**$0**.
 
 ## Fallback: single-service deploy
 
-Render also serves the built React app from the same origin when
-`frontend/dist` exists at runtime, so you can skip Vercel entirely and run
-everything on one URL with `FRONTEND_URL` left blank.
+`render.yaml` still describes a Render-only setup where one web service serves
+both the API and the built React app from the same origin (leave
+`FRONTEND_URL` blank in that case). See the git history of this file for the
+old Render walkthrough.

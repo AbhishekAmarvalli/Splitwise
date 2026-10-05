@@ -70,6 +70,9 @@ export default function GroupDetail() {
   useEffect(() => { loadAll(); }, [loadAll]);
 
   useSocket(id, {
+    // Polling fallback (serverless deploys): one event means something in the
+    // group changed — reload everything without toasting.
+    '__refresh': () => { loadExpenses(); loadBalances(); loadSettlements(); loadGroup(); },
     'expense-created': (expense) => { setExpenses((prev) => [expense, ...prev]); loadBalances(); loadSettlements(); toast(`${expense.paid_by_name} added "${expense.description}" — ₹${parseFloat(expense.amount).toFixed(2)}`, { icon: '💸' }); },
     'expense-deleted': () => { loadExpenses(); loadBalances(); },
     'settlement-created': (settlement) => { setSettlements((prev) => [settlement, ...prev]); loadBalances(); toast(`${settlement.from_user_name} paid ${settlement.to_user_name} ₹${parseFloat(settlement.amount).toFixed(2)}`, { icon: '✅' }); },

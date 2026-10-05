@@ -11,14 +11,26 @@ const balanceRoutes = require('./routes/balances');
 
 const app = express();
 
+// Vercel/Render terminate TLS and set X-Forwarded-For in front of us. Trust
+// exactly one proxy hop so req.ip (and express-rate-limit, which throws
+// ERR_ERL_UNEXPECTED_X_FORWARDED_FOR otherwise) resolves to the real client.
+app.set('trust proxy', 1);
+
 // Allows the test suite (supertest) to inspect the app without a live socket server.
 app.set('io', {
   to: () => ({ emit: () => {} }),
 });
 
-// Security headers. contentSecurityPolicy is disabled so the single-origin
-// production build can load its Google Fonts stylesheet.
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+// Security headers. contentSecurityPolicy is disabled so the production build
+// can load its Google Fonts stylesheet; CORP is cross-origin because the
+// frontend lives on a different Vercel project than this API.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 
 // Middleware
 app.use(cors(getCorsOptions()));
