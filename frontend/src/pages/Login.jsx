@@ -134,11 +134,6 @@ export default function Login() {
         <p className="auth-footer">
           Don't have an account? <Link to="/register">Sign up</Link>
         </p>
-        <div className="demo-credentials">
-          <p><strong>Demo accounts:</strong></p>
-          <p>alice@example.com / password123</p>
-          <p>bob@example.com / password123</p>
-        </div>
       </div>
     </div>
   );

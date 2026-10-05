@@ -1,7 +1,7 @@
 # 💸 SplitEase
 
-**🌐 Live app: <https://splitease-red.vercel.app>** — try it now, demo login
-`alice@example.com` / `password123` (or register a new account).
+**🌐 Live app: <https://splitease-red.vercel.app>** — register a new account
+to get started.
 
 A full-stack group expense tracker with real-time settlement, built with React, Node.js, and PostgreSQL.
 
@@ -78,15 +78,6 @@ npm run db:seed
 
 Frontend: http://localhost:5173  
 Backend API: http://localhost:5000
-
-### Demo Accounts
-
-| Email                | Password     |
-|----------------------|--------------|
-| alice@example.com    | password123  |
-| bob@example.com      | password123  |
-| charlie@example.com  | password123  |
-| diana@example.com    | password123  |
 
 ## API Endpoints
 

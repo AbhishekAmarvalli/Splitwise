@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import FriendshipCharacters from '../components/FriendshipCharacters';
 import { api } from '../utils/api';
 import toast from 'react-hot-toast';
 
@@ -116,8 +115,7 @@ export default function Dashboard() {
           </div>
         ) : groups.length === 0 ? (
           <div className="empty-state">
-            <FriendshipCharacters variant="default" size={180} />
-            <p style={{ marginTop: 'var(--space-4)', fontWeight: 800, fontSize: 'var(--text-h4)' }}>No groups yet!</p>
+            <p style={{ fontWeight: 800, fontSize: 'var(--text-h4)' }}>No groups yet!</p>
             <p>Create a group to start splitting expenses with friends.</p>
           </div>
         ) : (

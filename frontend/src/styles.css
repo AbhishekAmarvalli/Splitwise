@@ -428,8 +428,6 @@ a:hover { color: var(--blue-700); text-decoration-thickness: 3px; }
 .auth-footer { text-align: center; margin-top: var(--space-6); color: var(--text-muted); font-size: var(--text-sm); }
 .auth-card .btn { transition: none; }
 .auth-card a { transition: none; }
-.demo-credentials { margin-top: var(--space-6); padding: var(--space-4); background: var(--yellow-100); border: 2px solid var(--yellow-400); border-radius: var(--radius-sm); font-size: var(--text-xs); color: var(--yellow-900); text-align: center; box-shadow: var(--shadow-sm); font-weight: 700; }
-.demo-credentials p { margin: var(--space-1) 0; }
 
 /* ===== Forms ===== */
 .form-group { margin-bottom: var(--space-5); }
